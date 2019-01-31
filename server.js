@@ -29,23 +29,50 @@ const User = mongoose.model('User', userSchema);
 
 /** MIDDLEWARE */
 app.use(cors());
-
 app.use(bodyParser.urlencoded({extended: false}));
 app.use(bodyParser.json());
-
-
 app.use(express.static('public'));
+
+/** ROUTES */
+// base URI / homepage
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html')
 });
 
 
-// Not found middleware
+
+// POST a new user
+app.post('/api/exercise/new-user', (req, res) => {
+  res.json(req.route);
+});
+
+// POST a new exercise for a user
+app.post('/api/exercise/add', (req, res) => {
+  res.json(req.route);
+});
+
+// GET an array of all users
+app.get('/api/exercise/users', (req, res) => {
+  
+  res.json(req.route);
+});
+
+// GET exercise log for user
+app.get('/api/exercise/log', (req, res) => {
+  
+  res.json(req.route);
+});
+
+
+
+
+
+/** 'NOT FOUND' MIDDLEWARE */
 app.use((req, res, next) => {
   return next({status: 404, message: 'not found'})
 });
 
-// Error Handling middleware
+/** ERROR-HANDLING MIDDLEWARE */
 app.use((err, req, res, next) => {
   let errCode, errMessage
 
@@ -64,6 +91,7 @@ app.use((err, req, res, next) => {
     .send(errMessage)
 });
 
+/** LISTENER / START SERVER */
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
 });
