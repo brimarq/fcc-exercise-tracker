@@ -61,7 +61,7 @@ app.post('/api/exercise/add', verifyDate, (req, res) => {
     if (err) {
       console.log(err);
     } else {
-      if (!user) res.json({"error": "userId not found"});
+      if (!user) return res.json({"error": "userId not found"});
       let exercise = {
         description: req.body.description,
         duration: req.body.duration,
@@ -93,9 +93,11 @@ app.get('/api/exercise/users', (req, res) => {
 });
 
 // GET exercise log for user
-app.get('/api/exercise/log/:userId?', (req, res) => {
+app.get('/api/exercise/log', (req, res) => {
+  // Return early with res if query is missing userId
+  if (!req.query.userId) return res.json({"error": "Query missing userId"});
   
-  res.send(req.params);
+  res.send(req.query);
 });
 
 /** 'NOT FOUND' MIDDLEWARE */
