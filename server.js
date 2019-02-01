@@ -58,8 +58,8 @@ app.post('/api/exercise/new-user', checkUsername, (req, res) => {
 app.post('/api/exercise/add', (req, res) => {
   // Respond early if no userId was submitted
   if (!req.body.userId) res.json({"error": "No userId submitted."});
-  // Verify userId exists
-  User.findOne({_id: req.body.userId}, function(err, user) {
+  
+  User.findById(req.body.userId, function(err, user) {
     if (err) {
       console.log(err);
     } else {
@@ -80,7 +80,6 @@ app.post('/api/exercise/add', (req, res) => {
       });
     }
   });
-  // res.json(req.body);
 });
 
 // GET an array of all users
