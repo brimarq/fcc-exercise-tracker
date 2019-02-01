@@ -55,10 +55,8 @@ app.post('/api/exercise/new-user', checkUsername, (req, res) => {
 });
 
 // POST a new exercise for a user
-app.post('/api/exercise/add', (req, res) => {
-  // Respond early if no userId was submitted
-  if (!req.body.userId) res.json({"error": "No userId submitted."});
-  
+app.post('/api/exercise/add', verifyDate, (req, res) => {
+
   User.findById(req.body.userId, function(err, user) {
     if (err) {
       console.log(err);
@@ -67,7 +65,7 @@ app.post('/api/exercise/add', (req, res) => {
       let exercise = {
         description: req.body.description,
         duration: req.body.duration,
-        date: req.body.date || new Date()
+        date: req.body.date
       };
       user.exercises.push(exercise);
       user.save((err, savedUser) => {
@@ -84,8 +82,14 @@ app.post('/api/exercise/add', (req, res) => {
 
 // GET an array of all users
 app.get('/api/exercise/users', (req, res) => {
-  
-  res.json(req.route);
+  console.log(req.route.path);
+  User.find({}, (err, users) => {
+    if (err) {
+      console.log(err);
+    } else {
+      res.json(users);
+    }
+  });
 });
 
 // GET exercise log for user
@@ -129,20 +133,35 @@ function checkUsername(req, res, next) {
   });
 }
 
-function checkUserId(req, res, next) {
-  // Return early if no userId was submitted
-  if (!req.body.userId) {
-    return res.json({"error": "No userId submitted."});
-  } else {
-    // Verify userId exists
-    User.findOne({_id: req.body.userId}, function(err, user) {
-      if (err) {
-        console.log(err);
+function verifyDate(req, res, next) {
+  const regex = /(\d{4})-(\d{2})-(\d{2})/;
+
+  if (req.route.path === '/api/exercise/add') {
+    // No date submitted? Supply current date obj and continue to next
+    if (!req.body.date) {
+      req.body.date = new Date();
+      next();
+    }
+    // Otherwise, verify submitted date, convert to Date obj and continue to next
+    else {
+      if (!regex.test(req.body.date)) {
+        // Respond early with error if invalid date format
+        res.json({"error": "Invalid date format."});
       } else {
-        user ? next(user) : res.json({"error": "userId not found"});
+        let date = new Date(req.body.date), 
+        isInvalidDate = isNaN(date.valueOf());
+        if (isInvalidDate) {
+          res.json({"error": "Invalid date."});
+        } else {
+          req.body.date = date;
+          next();
+        }
       }
-    });
+    }
+  } else {
+    next();
   }
+
 }
 
 /** LISTENER / START SERVER */
