@@ -56,7 +56,31 @@ app.post('/api/exercise/new-user', checkUsername, (req, res) => {
 
 // POST a new exercise for a user
 app.post('/api/exercise/add', (req, res) => {
-  res.json(req.route);
+  // Respond early if no userId was submitted
+  if (!req.body.userId) res.json({"error": "No userId submitted."});
+  // Verify userId exists
+  User.findOne({_id: req.body.userId}, function(err, user) {
+    if (err) {
+      console.log(err);
+    } else {
+      if (!user) res.json({"error": "userId not found"});
+      let exercise = {
+        description: req.body.description,
+        duration: req.body.duration,
+        date: req.body.date || new Date()
+      };
+      user.exercises.push(exercise);
+      user.save((err, savedUser) => {
+        if (err) {
+          console.log(err);
+          res.json({"error": "Error saving exercise."});
+        } else {
+          res.json({savedUser});
+        }
+      });
+    }
+  });
+  // res.json(req.body);
 });
 
 // GET an array of all users
@@ -104,6 +128,22 @@ function checkUsername(req, res, next) {
       user ? res.json({"error": "username unavailable"}) : next();
     }
   });
+}
+
+function checkUserId(req, res, next) {
+  // Return early if no userId was submitted
+  if (!req.body.userId) {
+    return res.json({"error": "No userId submitted."});
+  } else {
+    // Verify userId exists
+    User.findOne({_id: req.body.userId}, function(err, user) {
+      if (err) {
+        console.log(err);
+      } else {
+        user ? next(user) : res.json({"error": "userId not found"});
+      }
+    });
+  }
 }
 
 /** LISTENER / START SERVER */
