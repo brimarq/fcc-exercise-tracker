@@ -39,11 +39,19 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html')
 });
 
-
-
-// POST a new user
-app.post('/api/exercise/new-user', (req, res) => {
-  res.json(req.route);
+// POST a new user, first checking if username exists
+app.post('/api/exercise/new-user', checkUsername, (req, res) => {
+  let user = new User({
+    username: req.body.username
+  });
+  user.save((err, savedUser) => {
+    if (err) {
+      console.log(err);
+      res.json({"error": "Could not save user."});
+    } else {
+      res.json(savedUser);
+    }
+  });
 });
 
 // POST a new exercise for a user
@@ -58,14 +66,10 @@ app.get('/api/exercise/users', (req, res) => {
 });
 
 // GET exercise log for user
-app.get('/api/exercise/log', (req, res) => {
+app.get('/api/exercise/log/:userId?', (req, res) => {
   
-  res.json(req.route);
+  res.send(req.params);
 });
-
-
-
-
 
 /** 'NOT FOUND' MIDDLEWARE */
 app.use((req, res, next) => {
@@ -90,6 +94,17 @@ app.use((err, req, res, next) => {
   res.status(errCode).type('txt')
     .send(errMessage)
 });
+
+/** FUNCTIONS */
+function checkUsername(req, res, next) {
+  User.findOne({username: req.body.username}, function(err, user) {
+    if (err) {
+      console.log(err);
+    } else {
+      user ? res.json({"error": "username unavailable"}) : next();
+    }
+  });
+}
 
 /** LISTENER / START SERVER */
 const listener = app.listen(process.env.PORT || 3000, () => {
