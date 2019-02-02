@@ -55,7 +55,7 @@ app.post('/api/exercise/new-user', checkUsername, (req, res) => {
 });
 
 // POST a new exercise for a user
-app.post('/api/exercise/add', verifyDate, (req, res) => {
+app.post('/api/exercise/add', verifyDates, (req, res) => {
 
   User.findById(req.body.userId, function(err, user) {
     if (err) {
@@ -93,7 +93,7 @@ app.get('/api/exercise/users', (req, res) => {
 });
 
 // GET exercise log for user
-app.get('/api/exercise/log', (req, res) => {
+app.get('/api/exercise/log', verifyDates, (req, res) => {
   // Return early with res if query is missing userId
   if (!req.query.userId) return res.json({"error": "Query missing userId"});
   
@@ -135,8 +135,7 @@ function checkUsername(req, res, next) {
   });
 }
 
-function verifyDate(req, res, next) {
-  const regex = /(\d{4})-(\d{2})-(\d{2})/;
+function verifyDates(req, res, next) {
 
   if (req.route.path === '/api/exercise/add') {
     // No date submitted? Supply current date obj and continue to next
@@ -146,13 +145,12 @@ function verifyDate(req, res, next) {
     }
     // Otherwise, verify submitted date, convert to Date obj and continue to next
     else {
-      if (!regex.test(req.body.date)) {
-        // Respond early with error if invalid date format
-        res.json({"error": "Invalid date format."});
+      if (!isCorrectFormat(req.body.date)) {
+        // Respond early with error if incorrect date format
+        res.json({"error": "Incorrect date format."});
       } else {
-        let date = new Date(req.body.date), 
-        isInvalidDate = isNaN(date.valueOf());
-        if (isInvalidDate) {
+        let date = new Date(req.body.date); 
+        if (isInvalidDate(date)) {
           res.json({"error": "Invalid date."});
         } else {
           req.body.date = date;
@@ -161,10 +159,63 @@ function verifyDate(req, res, next) {
       }
     }
   } else {
-    next();
+    if (req.query.from || req.query.to) {
+      let errors = [];
+
+      if (req.query.from) {
+        if (!isCorrectFormat(req.query.from)) {
+          // Respond early with error if incorrect date format
+          errors.push({"error": "Incorrect date format [from]."});
+        } else {
+          // Convert date string to Date, verify and save to query parameter if valid.
+          let date = new Date(req.query.from); 
+          if (isInvalidDate(date)) {
+            errors.push({"error": "Invalid date [from]."});
+          } else {
+            req.query.from = date;
+          }
+        }
+      }
+
+      if (req.query.to) {
+        if (!isCorrectFormat(req.query.to)) {
+          // Respond early with error if incorrect date format
+          errors.push({"error": "Incorrect date format [to]."});
+        } else {
+          // Convert date string to Date, verify and save to query parameter if valid.
+          let date = new Date(req.query.to); 
+          if (isInvalidDate(date)) {
+            errors.push({"error": "Invalid date [to]."});
+          } else {
+            req.query.to = date;
+          }
+        }
+      }
+
+      // Respond with errors, if any. Otherwise, go to next...
+      if (errors.length > 0) {
+        res.json(errors);
+      } else {
+        next();
+      }
+      
+    } else {
+      // Just go to next if missing 'from' and 'to' query parameters.
+      next();
+    }
+  }
+
+  function isCorrectFormat(dateStr) {
+    return /(\d{4})-(\d{2})-(\d{2})/.test(dateStr);
+  }
+
+  function isInvalidDate(dateObj) {
+    return isNaN(dateObj.valueOf());
   }
 
 }
+
+
 
 /** LISTENER / START SERVER */
 const listener = app.listen(process.env.PORT || 3000, () => {
