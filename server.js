@@ -94,10 +94,28 @@ app.get('/api/exercise/users', (req, res) => {
 
 // GET exercise log for user
 app.get('/api/exercise/log', verifyAndConvertDates, (req, res) => {
-  // Return early with res if query is missing userId
-  if (!req.query.userId) return res.json({"error": "Query missing userId"});
-  
-  res.send(req.query);
+  const queryParams = ['userId', 'from', 'to', 'limit'];
+  // Return early with res if query is missing required userId parameter
+  if (!req.query.userId) return res.json({"error": "Query missing userId parameter."});
+
+  User.findById(req.query.userId, function(err, user) {
+    if (err) {
+      console.log(err);
+    } else {
+      if (!user) return res.json({"error": "userId not found"});
+      let userObj = user.toObject({transform: xform, versionKey: false});
+      userObj.count = user.exercises.length;
+      userObj.log = [];
+      res.json(userObj);
+
+      function xform(doc, ret, options) {
+        delete ret['_id'];
+        
+        return ret;
+      }
+      
+    }
+  });
 });
 
 /** 'NOT FOUND' MIDDLEWARE */
@@ -201,6 +219,7 @@ function verifyAndConvertDates(req, res, next) {
       if (errors.length > 0) {
         res.json(errors);
       } else {
+        console.log(Object.keys(req.query));
         next();
       }
       
