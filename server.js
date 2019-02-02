@@ -55,7 +55,7 @@ app.post('/api/exercise/new-user', checkUsername, (req, res) => {
 });
 
 // POST a new exercise for a user
-app.post('/api/exercise/add', verifyDates, (req, res) => {
+app.post('/api/exercise/add', verifyAndConvertDates, (req, res) => {
 
   User.findById(req.body.userId, function(err, user) {
     if (err) {
@@ -93,7 +93,7 @@ app.get('/api/exercise/users', (req, res) => {
 });
 
 // GET exercise log for user
-app.get('/api/exercise/log', verifyDates, (req, res) => {
+app.get('/api/exercise/log', verifyAndConvertDates, (req, res) => {
   // Return early with res if query is missing userId
   if (!req.query.userId) return res.json({"error": "Query missing userId"});
   
@@ -135,7 +135,7 @@ function checkUsername(req, res, next) {
   });
 }
 
-function verifyDates(req, res, next) {
+function verifyAndConvertDates(req, res, next) {
 
   if (req.route.path === '/api/exercise/add') {
     // No date submitted? Supply current date obj and continue to next
@@ -145,7 +145,7 @@ function verifyDates(req, res, next) {
     }
     // Otherwise, verify submitted date, convert to Date obj and continue to next
     else {
-      if (!isCorrectFormat(req.body.date)) {
+      if (isIncorrectFormat(req.body.date)) {
         // Respond early with error if incorrect date format
         res.json({"error": "Incorrect date format."});
       } else {
@@ -163,7 +163,7 @@ function verifyDates(req, res, next) {
       let errors = [];
 
       if (req.query.from) {
-        if (!isCorrectFormat(req.query.from)) {
+        if (isIncorrectFormat(req.query.from)) {
           // Respond early with error if incorrect date format
           errors.push({"error": "Incorrect date format [from]."});
         } else {
@@ -178,7 +178,7 @@ function verifyDates(req, res, next) {
       }
 
       if (req.query.to) {
-        if (!isCorrectFormat(req.query.to)) {
+        if (isIncorrectFormat(req.query.to)) {
           // Respond early with error if incorrect date format
           errors.push({"error": "Incorrect date format [to]."});
         } else {
@@ -191,6 +191,11 @@ function verifyDates(req, res, next) {
           }
         }
       }
+
+      // Check for correct date order
+      if (req.query.from && req.query.to && req.query.from.getTime() > req.query.to.getTime()) {
+        errors.push({"error": "Query dates in wrong order."});
+      } 
 
       // Respond with errors, if any. Otherwise, go to next...
       if (errors.length > 0) {
@@ -205,15 +210,16 @@ function verifyDates(req, res, next) {
     }
   }
 
-  function isCorrectFormat(dateStr) {
-    return /(\d{4})-(\d{2})-(\d{2})/.test(dateStr);
+  function isIncorrectFormat(dateStr) {
+    const regex = /(\d{4})-(\d{2})-(\d{2})/;
+    return !regex.test(dateStr);
   }
 
   function isInvalidDate(dateObj) {
     return isNaN(dateObj.valueOf());
   }
 
-}
+} // END verifyAndConvertDates()
 
 
 
