@@ -2,30 +2,30 @@ require('dotenv').config(); // use for local dev
 const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
-
+const router = require('./router');
 const cors = require('cors');
 
 /** MONGOOSE SETUP */
 const mongoose = require('mongoose');
-mongoose.connect(process.env.MONGO_URI, {useNewUrlParser: true});
+mongoose.connect(process.env.MONGO_URI, {useNewUrlParser: true, useCreateIndex: true});
 
 
 /** SCHEMAS and MODELS */
-const Schema = mongoose.Schema;
+// const Schema = mongoose.Schema;
 
-const userSchema = new Schema({
-  username: {
-    type: String,
-    required: true
-  },
-  exercises: [{
-    description: String,
-    duration: Number,
-    date: Date
-  }]
-});
+// const userSchema = new Schema({
+//   username: {
+//     type: String,
+//     required: true
+//   },
+//   exercises: [{
+//     description: String,
+//     duration: Number,
+//     date: Date
+//   }]
+// });
 
-const User = mongoose.model('User', userSchema);
+// const User = mongoose.model('User', userSchema);
 
 /** MIDDLEWARE */
 app.use(cors());
@@ -39,84 +39,9 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html')
 });
 
-// POST a new user, first checking if username exists
-app.post('/api/exercise/new-user', checkUsername, (req, res) => {
-  let user = new User({
-    username: req.body.username
-  });
-  user.save((err, savedUser) => {
-    if (err) {
-      console.log(err);
-      res.json({"error": "Could not save user."});
-    } else {
-      res.json(savedUser);
-    }
-  });
-});
+// Send these requests to express router
+app.use('/api/exercise', router);
 
-// POST a new exercise for a user
-app.post('/api/exercise/add', verifyAndConvertDates, (req, res) => {
-
-  User.findById(req.body.userId, function(err, user) {
-    if (err) {
-      console.log(err);
-    } else {
-      if (!user) return res.json({"error": "userId not found"});
-      let exercise = {
-        description: req.body.description,
-        duration: req.body.duration,
-        date: req.body.date
-      };
-      user.exercises.push(exercise);
-      user.save((err, savedUser) => {
-        if (err) {
-          console.log(err);
-          res.json({"error": "Error saving exercise."});
-        } else {
-          res.json({savedUser});
-        }
-      });
-    }
-  });
-});
-
-// GET an array of all users
-app.get('/api/exercise/users', (req, res) => {
-  console.log(req.route.path);
-  User.find({}, (err, users) => {
-    if (err) {
-      console.log(err);
-    } else {
-      res.json(users);
-    }
-  });
-});
-
-// GET exercise log for user
-app.get('/api/exercise/log', verifyAndConvertDates, (req, res) => {
-  const queryParams = ['userId', 'from', 'to', 'limit'];
-  // Return early with res if query is missing required userId parameter
-  if (!req.query.userId) return res.json({"error": "Query missing userId parameter."});
-
-  User.findById(req.query.userId, function(err, user) {
-    if (err) {
-      console.log(err);
-    } else {
-      if (!user) return res.json({"error": "userId not found"});
-      let userObj = user.toObject({transform: xform, versionKey: false});
-      userObj.count = user.exercises.length;
-      userObj.log = [];
-      res.json(userObj);
-
-      function xform(doc, ret, options) {
-        delete ret['_id'];
-        
-        return ret;
-      }
-      
-    }
-  });
-});
 
 /** 'NOT FOUND' MIDDLEWARE */
 app.use((req, res, next) => {
@@ -141,105 +66,6 @@ app.use((err, req, res, next) => {
   res.status(errCode).type('txt')
     .send(errMessage)
 });
-
-/** FUNCTIONS */
-function checkUsername(req, res, next) {
-  User.findOne({username: req.body.username}, function(err, user) {
-    if (err) {
-      console.log(err);
-    } else {
-      user ? res.json({"error": "username unavailable"}) : next();
-    }
-  });
-}
-
-function verifyAndConvertDates(req, res, next) {
-
-  if (req.route.path === '/api/exercise/add') {
-    // No date submitted? Supply current date obj and continue to next
-    if (!req.body.date) {
-      req.body.date = new Date();
-      next();
-    }
-    // Otherwise, verify submitted date, convert to Date obj and continue to next
-    else {
-      if (isIncorrectFormat(req.body.date)) {
-        // Respond early with error if incorrect date format
-        res.json({"error": "Incorrect date format."});
-      } else {
-        let date = new Date(req.body.date); 
-        if (isInvalidDate(date)) {
-          res.json({"error": "Invalid date."});
-        } else {
-          req.body.date = date;
-          next();
-        }
-      }
-    }
-  } else {
-    if (req.query.from || req.query.to) {
-      let errors = [];
-
-      if (req.query.from) {
-        if (isIncorrectFormat(req.query.from)) {
-          // Respond early with error if incorrect date format
-          errors.push({"error": "Incorrect date format [from]."});
-        } else {
-          // Convert date string to Date, verify and save to query parameter if valid.
-          let date = new Date(req.query.from); 
-          if (isInvalidDate(date)) {
-            errors.push({"error": "Invalid date [from]."});
-          } else {
-            req.query.from = date;
-          }
-        }
-      }
-
-      if (req.query.to) {
-        if (isIncorrectFormat(req.query.to)) {
-          // Respond early with error if incorrect date format
-          errors.push({"error": "Incorrect date format [to]."});
-        } else {
-          // Convert date string to Date, verify and save to query parameter if valid.
-          let date = new Date(req.query.to); 
-          if (isInvalidDate(date)) {
-            errors.push({"error": "Invalid date [to]."});
-          } else {
-            req.query.to = date;
-          }
-        }
-      }
-
-      // Check for correct date order
-      if (req.query.from && req.query.to && req.query.from.getTime() > req.query.to.getTime()) {
-        errors.push({"error": "Query dates in wrong order."});
-      } 
-
-      // Respond with errors, if any. Otherwise, go to next...
-      if (errors.length > 0) {
-        res.json(errors);
-      } else {
-        console.log(Object.keys(req.query));
-        next();
-      }
-      
-    } else {
-      // Just go to next if missing 'from' and 'to' query parameters.
-      next();
-    }
-  }
-
-  function isIncorrectFormat(dateStr) {
-    const regex = /(\d{4})-(\d{2})-(\d{2})/;
-    return !regex.test(dateStr);
-  }
-
-  function isInvalidDate(dateObj) {
-    return isNaN(dateObj.valueOf());
-  }
-
-} // END verifyAndConvertDates()
-
 
 
 /** LISTENER / START SERVER */

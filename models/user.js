@@ -9,6 +9,8 @@ const userSchema = new Schema({
   }
 });
 
+
+
 module.exports = mongoose.model('User', userSchema);
 
 /** Comment notes for SchemaType options
