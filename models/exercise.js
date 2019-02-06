@@ -3,19 +3,22 @@ const Schema = mongoose.Schema;
 
 const exerciseSchema = new Schema({
   userId: {
-    type: String,
-    required: true,
+    type: Schema.Types.ObjectId,
+    required: [ true, "Oops! `userId` is required." ],
     ref: 'User'
   },
   description: {
     type: String,
-    required: true
+    required: [ true, "Oops! `description` is required." ]
   },
   duration: {
     type: Number,
-    required: true
+    required: [ true, "Oops! `duration` is required." ]
   },
-  date: Date,
+  date: {
+    type: Date,
+    required: true
+  }
 });
 
 
