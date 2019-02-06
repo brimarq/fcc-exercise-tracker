@@ -1,20 +1,20 @@
 const router = require('express').Router();
 const User = require('./models/user');
 const Exercise = require('./models/exercise');
-
+const dateFormatRegex = /(\d{4})-(\d{2})-(\d{2})/;
 
 // POST a new user
 router.post('/new-user', (req, res, next) => {
   // No username submitted? Send json error.
-  if (!req.body.username) return res.json({"error": "Username is required."});
+  // if (!req.body.username) return res.json({"error": "Username is required."});
   let user = new User(req.body);
   user.save((err, savedUser) => {
     if (err) {
       // error code 11000 thrown if username already exists. Any other errs go to next.
-      if (err.code === 11000) return res.json({"error": "The username '" + req.body.username + "' is unavailable. Please choose another."});
-      next(err);
+      if (err.code === 11000) return next({status: 400, message: "The username '" + req.body.username + "' is unavailable."});
+      return next(err);
     }
-    // Convert returned doc to JS Object with "__v" key omitted.
+    // Convert returned doc to JS Object with "__v" key omitted, then send as json res.
     savedUser = savedUser.toObject({ versionKey: false });
     res.json(savedUser);
   });
@@ -22,6 +22,36 @@ router.post('/new-user', (req, res, next) => {
 
 // POST a new exercise for a user
 router.post('/add', (req, res, next) => {
+
+  let date = req.body.date;
+  // Is date incorrect format or invalid? Return early with json error res. Else, set req.body.date as appropriate date obj. 
+  if (date && !dateFormatRegex.test(date)) {
+    return next({status: 400, message: "Incorrect date format."});
+  } else {
+    date = date ? new Date(date) : new Date(Date.now());
+    if (isNaN(date.getTime())) {
+      return next({status: 400, message: "Invalid date."});
+    } else {
+      req.body.date = date;
+    }
+  }
+
+  User.findById(req.body.userId, function(err, user) {
+    if (err) {
+      // err if no userId submitted
+      if (!req.body.userId) return next({status: 400, message: "Oops! `userId` is required."});
+      // otherwise userId not found
+      return next({status: 400, message: "userId '" + err.value + "' not found."});
+    }
+
+    let exercise = new Exercise(req.body);
+
+    exercise.save((err, savedExercise) => {
+      console.error(err);
+      if (err) return next(err);
+      res.json(savedExercise);
+    });
+  });
 
   // User.findById(req.body.userId, function(err, user) {
   //   if (err) {
@@ -86,15 +116,6 @@ router.get('/log', (req, res, next) => {
 
 
 /** FUNCTIONS */
-function checkUsername(req, res, next) {
-  User.findOne({username: req.body.username}, function(err, user) {
-    if (err) {
-      console.log(err);
-    } else {
-      user ? res.json({"error": "username unavailable"}) : next();
-    }
-  });
-}
 
 function verifyAndConvertDates(req, res, next) {
 
