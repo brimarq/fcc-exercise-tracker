@@ -4,12 +4,10 @@ const Schema = mongoose.Schema;
 const userSchema = new Schema({
   username: {
     type: String,
-    required: true, //[1]
+    required: [ true, "Oops! `username` is required." ], //[1]
     unique: true //[2]
   }
 });
-
-
 
 module.exports = mongoose.model('User', userSchema);
 
