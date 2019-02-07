@@ -16,7 +16,7 @@ const exerciseSchema = new Schema({
     required: [ true, "Oops! `duration` is required." ]
   },
   date: {
-    type: Date,
+    type: Number,
     required: true
   }
 });
