@@ -5,8 +5,6 @@ const dateFormatRegex = /(\d{4})-(\d{2})-(\d{2})/;
 
 // POST a new user
 router.post('/new-user', (req, res, next) => {
-  // No username submitted? Send json error.
-  // if (!req.body.username) return res.json({"error": "Username is required."});
   let user = new User(req.body);
   user.save((err, savedUser) => {
     if (err) {
@@ -87,9 +85,45 @@ router.get('/users', (req, res, next) => {
 });
 
 // GET exercise log for user
-router.get('/log', (req, res, next) => {
+router.get('/log', (req, res, next) => { 
+  let dates = [req.query.from, req.query.to];
+  const isCorrectDateFormat = dates.every(dateStr => dateStr === undefined ? true : dateFormatRegex.test(dateStr));
+  // Handle possible query errors
+  console.log(dates);
+  // err for missing userId
+  if (!req.query.userId) return next({status: 400, message: "Query missing required 'userId' parameter."});
+  // err for incorrectly formatted date string (includes empty string). Undefined is ok here.
+  if (!isCorrectDateFormat) return next({status: 400, message: "Query has incorrect date format. Requires yyy-mm-dd"});
+  // Convert date strings defined in query to unix timestamp. Otherwise, leave undefined.
+  dates = dates.map(dateStr => dateStr === undefined ? dateStr : new Date(dateStr).getTime());
+  // Return error if both query dates are present but in wrong order.
+  if (dates.every(timestamp => timestamp !== undefined) && dates[0] > dates[1]) return next({status: 400, message: "Oops! Query dates in wrong order (from > to)."});
+  
+  req.query.from = dates[0];
+  req.query.to = dates[1];
+
+  console.log(dates);
+  
+  User.findById(req.query.userId, function(err, user) {
+    if (err) {
+      if (err.name === "CastError") return next({status: 400, message: "userId '" + err.value + "' not found."});
+      return next(err);
+    }
+
+    Exercise.find({userId: user._id}, function(err, exercises) {
+      if (err) return next(err);
+      
+    });
+
+    user = user.toObject({ versionKey: false });
+    user.count = 2;
+    user.log = [{description: "squats", duration: 18}, {description: "pushups", duration: 20}];
+
+    res.json(user);
+  });
 
 
+  
   // const queryParams = ['userId', 'from', 'to', 'limit'];
   // // Return early with res if query is missing required userId parameter
   // if (!req.query.userId) return res.json({"error": "Query missing userId parameter."});
