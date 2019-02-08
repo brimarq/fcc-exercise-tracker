@@ -8,7 +8,7 @@ router.post('/new-user', (req, res, next) => {
   let user = new User(req.body);
   user.save((err, savedUser) => {
     if (err) {
-      // error code 11000 thrown if username already exists. Any other errs go to next.
+      // error code 11000 thrown if username already exists (due to 'unique' option on path). Any other errs go to next.
       if (err.code === 11000) return next({status: 400, message: "The username '" + req.body.username + "' is unavailable."});
       return next(err);
     }
@@ -20,17 +20,21 @@ router.post('/new-user', (req, res, next) => {
 
 // POST a new exercise for a user
 router.post('/add', (req, res, next) => {
-
-  let date = req.body.date;
-  // Is date incorrect format or invalid? Return early with json error res. Else, set req.body.date as appropriate date obj. 
-  if (date && !dateFormatRegex.test(date)) {
-    return next({status: 400, message: "Incorrect date format."});
+  // Handle date
+  if (!req.body.date) {
+    // No date submitted? Set to unix timestamp for current time.
+    req.body.date = Date.now();
   } else {
-    date = date ? new Date(date) : new Date(Date.now());
-    if (isNaN(date.getTime())) {
-      return next({status: 400, message: "Invalid date."});
+    // Incorrect date format? Return early with err to next.
+    if (!dateFormatRegex.test(req.body.date)) {
+      return next({status: 400, message: "Incorrect date format."});
     } else {
-      req.body.date = date;
+      // Convert submitted date to unix timestamp
+      const timestamp = timestampFromYYYMMDD(req.body.date);
+      // If submitted date is invalid, return err to next.
+      if (isNaN(timestamp)) return next({status: 400, message: "Invalid date."});
+      // Set submitted date to its unix timestamp equivalent.
+      req.body.date = timestamp;
     }
   }
 
@@ -43,35 +47,12 @@ router.post('/add', (req, res, next) => {
     }
 
     let exercise = new Exercise(req.body);
-
     exercise.save((err, savedExercise) => {
-      console.error(err);
       if (err) return next(err);
       res.json(savedExercise);
     });
   });
 
-  // User.findById(req.body.userId, function(err, user) {
-  //   if (err) {
-  //     console.log(err);
-  //   } else {
-  //     if (!user) return res.json({"error": "userId not found"});
-  //     let exercise = {
-  //       description: req.body.description,
-  //       duration: req.body.duration,
-  //       date: req.body.date
-  //     };
-  //     user.exercises.push(exercise);
-  //     user.save((err, savedUser) => {
-  //       if (err) {
-  //         console.log(err);
-  //         res.json({"error": "Error saving exercise."});
-  //       } else {
-  //         res.json({savedUser});
-  //       }
-  //     });
-  //   }
-  // });
 });
 
 // GET an array of all users
@@ -86,23 +67,24 @@ router.get('/users', (req, res, next) => {
 
 // GET exercise log for user
 router.get('/log', (req, res, next) => { 
-  let dates = [req.query.from, req.query.to];
+  const q = req.query;
+  let dates = [q.from, q.to];
   const isCorrectDateFormat = dates.every(dateStr => dateStr === undefined ? true : dateFormatRegex.test(dateStr));
   // Handle possible query errors
-  console.log(dates);
+  // console.log(dates);
   // err for missing userId
-  if (!req.query.userId) return next({status: 400, message: "Query missing required 'userId' parameter."});
+  if (!q.userId) return next({status: 400, message: "Query missing required 'userId' parameter."});
   // err for incorrectly formatted date string (includes empty string). Undefined is ok here.
   if (!isCorrectDateFormat) return next({status: 400, message: "Query has incorrect date format. Requires yyy-mm-dd"});
   // Convert date strings defined in query to unix timestamp. Otherwise, leave undefined.
-  dates = dates.map(dateStr => dateStr === undefined ? dateStr : new Date(dateStr).getTime());
+  dates = dates.map(dateStr => dateStr === undefined ? dateStr : timestampFromYYYMMDD(dateStr));
   // Return error if both query dates are present but in wrong order.
   if (dates.every(timestamp => timestamp !== undefined) && dates[0] > dates[1]) return next({status: 400, message: "Oops! Query dates in wrong order (from > to)."});
   
-  req.query.from = dates[0];
-  req.query.to = dates[1];
+  // Convert query dates to timestamps or undefined.
+  q.from = dates[0];
+  q.to = dates[1];
 
-  console.log(dates);
   
   User.findById(req.query.userId, function(err, user) {
     if (err) {
@@ -110,133 +92,55 @@ router.get('/log', (req, res, next) => {
       return next(err);
     }
 
-    Exercise.find({userId: user._id}, function(err, exercises) {
+    let findFilter = {
+      userId: user._id,
+      date: {
+        $gte: q.from || 0,
+        $lte: q.to || Date.now()
+      }
+    };
+
+    let findOptions = {
+      sort: '-date', limit: q.limit ? +q.limit : 0
+    };
+
+    Exercise.find(findFilter, 'description duration date', findOptions, function(err, exercises) {
       if (err) return next(err);
-      
+
+      function xform(doc, ret, options) {
+        delete ret._id;
+        ret.date = new Date(ret.date).toDateString();
+        return ret;
+      }
+
+      let logArr = exercises.map(doc => doc.toObject({transform: xform}));
+
+      user = user.toObject({ versionKey: false });
+      user.count = logArr.length;
+      user.log = logArr;
+
+      res.json(user);
     });
 
-    user = user.toObject({ versionKey: false });
-    user.count = 2;
-    user.log = [{description: "squats", duration: 18}, {description: "pushups", duration: 20}];
-
-    res.json(user);
   });
 
-
-  
-  // const queryParams = ['userId', 'from', 'to', 'limit'];
-  // // Return early with res if query is missing required userId parameter
-  // if (!req.query.userId) return res.json({"error": "Query missing userId parameter."});
-
-  // User.findById(req.query.userId, function(err, user) {
-  //   if (err) {
-  //     console.log(err);
-  //   } else {
-  //     if (!user) return res.json({"error": "userId not found"});
-  //     let userObj = user.toObject({transform: xform, versionKey: false});
-  //     userObj.count = user.exercises.length;
-  //     userObj.log = [];
-  //     res.json(userObj);
-
-  //     function xform(doc, ret, options) {
-  //       delete ret['_id'];
-        
-  //       return ret;
-  //     }
-      
-  //   }
-  // });
 });
 
 
 /** FUNCTIONS */
 
-function verifyAndConvertDates(req, res, next) {
+function timestampFromYYYMMDD(dateString) {
+  /** This corrects the maddening issue of creating timestamps from date objects 
+   * created with new Date("yyy-mm-dd"), which return dates in UTC. The problem: 
+   *  new Date("yyy-mm-dd").getTime() returns a timestamp in UTC from a date in UTC
+   *  Date.now() returns a UTC timestamp created from a local time. NOT GOOD! 
+   * We want all timestamps created from local time!!
+   */
+  const msOffset = new Date().getTimezoneOffset() * 60000;
+  const timestamp = new Date(dateString).getTime() + msOffset;
+  return timestamp;
+}
 
-  if (req.route.path === '/api/exercise/add') {
-    // No date submitted? Supply current date obj and continue to next
-    if (!req.body.date) {
-      req.body.date = new Date();
-      next();
-    }
-    // Otherwise, verify submitted date, convert to Date obj and continue to next
-    else {
-      if (isIncorrectFormat(req.body.date)) {
-        // Respond early with error if incorrect date format
-        res.json({"error": "Incorrect date format."});
-      } else {
-        let date = new Date(req.body.date); 
-        if (isInvalidDate(date)) {
-          res.json({"error": "Invalid date."});
-        } else {
-          req.body.date = date;
-          next();
-        }
-      }
-    }
-  } else {
-    if (req.query.from || req.query.to) {
-      let errors = [];
-
-      if (req.query.from) {
-        if (isIncorrectFormat(req.query.from)) {
-          // Respond early with error if incorrect date format
-          errors.push({"error": "Incorrect date format [from]."});
-        } else {
-          // Convert date string to Date, verify and save to query parameter if valid.
-          let date = new Date(req.query.from); 
-          if (isInvalidDate(date)) {
-            errors.push({"error": "Invalid date [from]."});
-          } else {
-            req.query.from = date;
-          }
-        }
-      }
-
-      if (req.query.to) {
-        if (isIncorrectFormat(req.query.to)) {
-          // Respond early with error if incorrect date format
-          errors.push({"error": "Incorrect date format [to]."});
-        } else {
-          // Convert date string to Date, verify and save to query parameter if valid.
-          let date = new Date(req.query.to); 
-          if (isInvalidDate(date)) {
-            errors.push({"error": "Invalid date [to]."});
-          } else {
-            req.query.to = date;
-          }
-        }
-      }
-
-      // Check for correct date order
-      if (req.query.from && req.query.to && req.query.from.getTime() > req.query.to.getTime()) {
-        errors.push({"error": "Query dates in wrong order."});
-      } 
-
-      // Respond with errors, if any. Otherwise, go to next...
-      if (errors.length > 0) {
-        res.json(errors);
-      } else {
-        console.log(Object.keys(req.query));
-        next();
-      }
-      
-    } else {
-      // Just go to next if missing 'from' and 'to' query parameters.
-      next();
-    }
-  }
-
-  function isIncorrectFormat(dateStr) {
-    const regex = /(\d{4})-(\d{2})-(\d{2})/;
-    return !regex.test(dateStr);
-  }
-
-  function isInvalidDate(dateObj) {
-    return isNaN(dateObj.valueOf());
-  }
-
-} // END verifyAndConvertDates()
 
 
 module.exports = router;
