@@ -9,24 +9,6 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 mongoose.connect(process.env.MONGO_URI, {useNewUrlParser: true, useCreateIndex: true});
 
-
-/** SCHEMAS and MODELS */
-// const Schema = mongoose.Schema;
-
-// const userSchema = new Schema({
-//   username: {
-//     type: String,
-//     required: true
-//   },
-//   exercises: [{
-//     description: String,
-//     duration: Number,
-//     date: Date
-//   }]
-// });
-
-// const User = mongoose.model('User', userSchema);
-
 /** MIDDLEWARE */
 app.use(cors());
 app.use(bodyParser.urlencoded({extended: false}));
