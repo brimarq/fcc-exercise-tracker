@@ -60,8 +60,8 @@ router.get('/users', (req, res, next) => {
   User.find({}, (err, users) => {
     if (err) return next(err);
     // Convert docs in returned array to JS Objects with "__v" key omitted.
-    retUsers = users.map(u => u.toObject({ versionKey: false }));
-    res.json(retUsers);
+    users = users.map(u => u.toObject({ versionKey: false }));
+    res.json(users);
   });
 });
 
